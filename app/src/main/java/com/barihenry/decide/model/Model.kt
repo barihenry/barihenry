@@ -12,13 +12,19 @@ fun newId(): String = UUID.randomUUID().toString()
  */
 data class Impact(val week: Int, val month: Int, val year: Int) {
     /**
-     * Size of the outcome on a 0..10 scale. Longer-lasting effects count more
-     * (weights 1, 2, 3 for week, month, year), so all-5s gives 10.
+     * Size of the outcome on a 0..10 scale: a weighted average of the three answers, each
+     * weighted by the length of its period in days (7, 365/12, 365), scaled so all-5s gives 10.
+     * A year therefore counts 365/7 (about 52) times as much as a week.
      */
-    val magnitude: Double get() = (week + 2.0 * month + 3.0 * year) / 3.0
+    val magnitude: Double
+        get() = (WEEK_DAYS * week + MONTH_DAYS * month + YEAR_DAYS * year) / TOTAL_DAYS * (10.0 / MAX)
 
     companion object {
         const val MAX = 5
+        const val WEEK_DAYS = 7.0
+        const val MONTH_DAYS = 365.0 / 12
+        const val YEAR_DAYS = 365.0
+        private const val TOTAL_DAYS = WEEK_DAYS + MONTH_DAYS + YEAR_DAYS
     }
 }
 

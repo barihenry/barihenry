@@ -78,10 +78,13 @@ class AnalysisTest {
         assertEquals(10.0, happinessScore(true, Impact(5, 5, 5)), 1e-9)
         assertEquals(-10.0, happinessScore(false, Impact(5, 5, 5)), 1e-9)
         assertEquals(0.0, happinessScore(true, Impact(0, 0, 0)), 1e-9)
+        // Weights are proportional to days: a year counts 365/7 times as much as a week.
+        val total = 7 + 365.0 / 12 + 365
         // A good meal: noticeable for a week, gone after that.
-        assertEquals(1.0 / 3, happinessScore(true, Impact(1, 0, 0)), 1e-9)
+        assertEquals(7 * 1 / total * 2, happinessScore(true, Impact(1, 0, 0)), 1e-9)
         // A great vacation: big for a week, fading over the year.
-        assertEquals((5 + 8 + 6) / 3.0, happinessScore(true, Impact(5, 4, 2)), 1e-9)
+        assertEquals((7 * 5 + 365.0 / 12 * 4 + 365 * 2) / total * 2, happinessScore(true, Impact(5, 4, 2)), 1e-9)
+        assertEquals(365.0 / 7, Impact(0, 0, 1).magnitude / Impact(1, 0, 0).magnitude, 1e-9)
     }
 
     @Test

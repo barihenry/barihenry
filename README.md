@@ -23,9 +23,13 @@ It then plots each option's outcome distribution as a probability histogram, wor
 ## What it calculates
 
 **Score from the Happiness Test.** With week, month and year ratings *w*, *m*, *y* (each 0–5),
-the size of an outcome is (*w* + 2*m* + 3*y*) / 3, a number from 0 to 10. Longer-lasting
-effects count more. Bad outcomes get a minus sign. For example, a disappointing meal (1/0/0)
-scores -0.3, and a job you hate (5/4/2) scores -6.3.
+each rating is weighted by the length of its period in days (7, 365/12 and 365), so a year counts
+365/7 ≈ 52 times as much as a week:
+
+size = (7·*w* + 30.4·*m* + 365·*y*) / 402.4 × 2, a number from 0 to 10.
+
+Bad outcomes get a minus sign. So what matters is mostly the year rating. A disappointing meal
+(1/0/0) scores -0.03, and a job you hate (5/4/2) scores -4.4.
 
 For an option with outcomes *i* with score *sᵢ* and probability *pᵢ*:
 

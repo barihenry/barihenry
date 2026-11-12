@@ -207,7 +207,7 @@ fun OutcomeDialog(
                         ImpactRow("a week later", week) { week = it }
                         ImpactRow("a month later", month) { month = it }
                         ImpactRow("a year later", year) { year = it }
-                        Caption("0 = no effect · 5 = massive effect. Longer-lasting effects count more.")
+                        Caption("0 = no effect · 5 = massive effect. Each answer counts in proportion to its length of time, so the year matters most.")
                     }
                     score?.let { ScoreLine(it) }
                 }
