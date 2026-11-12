@@ -107,3 +107,6 @@ fun fmt(v: Double): String {
 }
 
 fun pct(fraction: Double): String = "${fmt(fraction * 100)}%"
+
+/** Like [fmt] but with a leading "+" for positive numbers. */
+fun signed(v: Double): String = "${if (v > 0) "+" else ""}${fmt(v)}"

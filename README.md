@@ -2,10 +2,15 @@
 
 A small, no-frills Android app for thinking through decisions with expected value.
 
-For a decision you list your **options** (mutually exclusive: you pick exactly one). For each option the app asks:
+For a decision you list your **options** (mutually exclusive: you pick exactly one). For each
+option you add **outcomes**, and the app asks about each one. The questions follow Annie Duke's
+*How to Decide*:
 
-1. *What could happen?* (an outcome)
-2. *How good or bad would that be for you?* (a score from -10 to +10)
+1. *What could happen?* Asked as a **premortem** ("imagine it went badly: what happened?") or a
+   **backcast** ("imagine it went well: what happened?").
+2. *Would that be good or bad for you, and how much would it affect your happiness a week, a month
+   and a year later?* (the **Happiness Test**, 0–5 for each). This sets the outcome's score from
+   -10 to +10. You can also set the score directly with a slider.
 3. *How likely is it?* (a probability in %)
 
 It then plots each option's outcome distribution as a probability histogram, works out the
@@ -17,16 +22,35 @@ It then plots each option's outcome distribution as a probability histogram, wor
 
 ## What it calculates
 
+**Score from the Happiness Test.** With week, month and year ratings *w*, *m*, *y* (each 0–5),
+the size of an outcome is (*w* + 2*m* + 3*y*) / 3, a number from 0 to 10. Longer-lasting
+effects count more. Bad outcomes get a minus sign. For example, a disappointing meal (1/0/0)
+scores -0.3, and a job you hate (5/4/2) scores -6.3.
+
 For an option with outcomes *i* with score *sᵢ* and probability *pᵢ*:
 
 - **Expected value**: Σ pᵢ·sᵢ
-- **Spread**: standard deviation, √Σ pᵢ·(sᵢ − EV)²
+- **Upside / downside**: the part of the EV from good outcomes and the part from bad outcomes
+  (they add up to the EV)
 - **Chance of a bad outcome**: total probability of outcomes with a negative score
 - **Worst / best case**
+- **Spread**: standard deviation
 
-If an option's probabilities don't add up to 100%, they're treated as relative weights and
-rescaled (the app shows a warning). Options are ranked by EV; the summary also points out the
-option with the lowest chance of a bad outcome when that's a different one.
+**Probabilities.** As in the book, you only list the *reasonable* outcomes, so an option's
+probabilities may add up to less than 100%. The unlisted remainder counts as neutral (score 0).
+They can't add up to more than 100%, because the outcomes are mutually exclusive. The app won't
+let you enter more than what's left.
+
+**Notes the app adds** (from the book's chapter on deciding faster):
+
+- **Close call**: when two or more options are within 1 point of the best EV. "When a decision is
+  hard, that means it's easy": you can't be that wrong with any of them. A **Flip a coin** button
+  picks one.
+- **Freeroll**: when an option's worst outcome is no worse than -1 and it has something to gain.
+  Decide fast, but beware of choices you'll repeat, where small costs add up.
+
+Options are ranked by EV. The summary also points out the option with the lowest chance of a bad
+outcome when that's a different one.
 
 Data is stored locally on the phone (`decisions.json` in the app's private storage).
 
@@ -60,4 +84,7 @@ Or open the folder in Android Studio and press Run.
 
 - Relax mutual exclusivity (combinations of options)
 - Risk-aversion: utility curves instead of raw EV
-- Probability ranges / sensitivity analysis
+- Probability ranges (best guess plus low/high, with the "shock test") and checking whether the ranking changes
+- Your own word-to-percentage table ("likely" = 70%) for entering probabilities
+- Base rates (the "outside view") next to your estimates
+- Record what actually happened, to check how well-calibrated your estimates were

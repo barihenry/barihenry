@@ -67,6 +67,13 @@ class DecisionStore(private val file: File) {
                     put("description", it.description)
                     put("score", it.score)
                     put("probability", it.probability)
+                    it.impact?.let { i ->
+                        put("impact", JSONObject().apply {
+                            put("week", i.week)
+                            put("month", i.month)
+                            put("year", i.year)
+                        })
+                    }
                 })
             }
         })
@@ -91,6 +98,9 @@ class DecisionStore(private val file: File) {
                     description = o.getString("description"),
                     score = o.getDouble("score"),
                     probability = o.getDouble("probability"),
+                    impact = o.optJSONObject("impact")?.let { i ->
+                        Impact(i.getInt("week"), i.getInt("month"), i.getInt("year"))
+                    },
                 )
             }
         },

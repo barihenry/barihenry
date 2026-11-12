@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -161,7 +162,13 @@ fun DecisionScreen(
             }
 
             if (scored.isNotEmpty()) {
-                item { SummaryCard(decision, scored.map { it.first to it.second!! }) }
+                item {
+                    SummaryCard(
+                        decision,
+                        scored.map { it.first to it.second!! },
+                        onChoose = { id -> store.update(decision.id) { it.copy(chosenOptionId = id) } },
+                    )
+                }
             }
 
             items(ranked, key = { it.first.id }) { (option, stats) ->
@@ -225,9 +232,15 @@ fun DecisionScreen(
 }
 
 @Composable
-private fun SummaryCard(decision: Decision, scored: List<Pair<Option, OptionStats>>) {
+private fun SummaryCard(
+    decision: Decision,
+    scored: List<Pair<Option, OptionStats>>,
+    onChoose: (String) -> Unit,
+) {
     val (best, bestStats) = scored.first()
     val chosen = decision.options.find { it.id == decision.chosenOptionId }
+    val close = Analysis.closeCall(decision)
+    var coinResult by remember { mutableStateOf<Option?>(null) }
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
@@ -256,10 +269,31 @@ private fun SummaryCard(decision: Decision, scored: List<Pair<Option, OptionStat
                     )
                 }
             }
+            if (close.isNotEmpty()) {
+                Spacer(Modifier.height(4.dp))
+                Text("Close call", style = MaterialTheme.typography.labelMedium)
+                Text(
+                    "${close.joinToString(", ") { it.name }} are within ${fmt(Analysis.CLOSE_CALL_GAP)} point " +
+                        "of each other. When a decision is hard, that means it's easy: whichever you pick, " +
+                        "you can't be that wrong. If you'd be happy with each one as your only option, just pick one.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                OutlinedButton(onClick = {
+                    val pick = close.random()
+                    coinResult = pick
+                    onChoose(pick.id)
+                }) { Text("Flip a coin") }
+                coinResult?.let {
+                    Text("The coin says: ${it.name}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                }
+            }
             if (chosen != null) {
                 Text(
-                    if (chosen == best) "You chose ${chosen.name} ✓"
-                    else "You chose ${chosen.name}, which isn't the highest-EV option.",
+                    when {
+                        chosen == best -> "You chose ${chosen.name} ✓"
+                        chosen in close -> "You chose ${chosen.name}, one of the close options ✓"
+                        else -> "You chose ${chosen.name}, which isn't the highest-EV option."
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                 )
@@ -299,12 +333,13 @@ private fun OptionCard(
             } else {
                 Histogram(stats, xRange = xRange, height = 56.dp, detailed = false)
                 Text(
-                    "Spread ±${fmt(stats.stdDev)} · bad outcome ${pct(stats.chanceOfBad)} · " +
-                        "range ${fmt(stats.worst)} to ${fmt(stats.best)}",
+                    "Upside ${signed(stats.upside)} · downside ${signed(stats.downside)} · " +
+                        "bad outcome ${pct(stats.chanceOfBad)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (!stats.sumsTo100) ProbabilityWarning(stats)
+                if (stats.isFreeroll) FreerollNote(short = true)
+                ProbabilityNote(stats)
                 if (isChosen) {
                     Button(onClick = onChoose) {
                         Icon(Icons.Default.Check, null)
@@ -326,7 +361,7 @@ private fun OptionCard(
 @Composable
 fun OptionScreen(store: DecisionStore, decision: Decision, option: Option, onBack: () -> Unit) {
     var editing by remember { mutableStateOf<Outcome?>(null) }
-    var addingOutcome by remember { mutableStateOf(false) }
+    var adding by remember { mutableStateOf<OutcomePrompt?>(null) }
     var renaming by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
     val stats = Analysis.stats(option)
@@ -353,8 +388,9 @@ fun OptionScreen(store: DecisionStore, decision: Decision, option: Option, onBac
             if (option.outcomes.isEmpty()) {
                 item {
                     Hint(
-                        "If you choose \"${option.name}\", what could happen? Add each outcome you can think of, " +
-                            "rate how good or bad it would be for you, and estimate how likely it is."
+                        "If you choose \"${option.name}\", what could happen? Start by imagining it went badly " +
+                            "and asking why (a premortem), then imagine it went well (a backcast). For each outcome, " +
+                            "say how much it would affect your happiness and how likely it is."
                     )
                 }
             }
@@ -364,10 +400,13 @@ fun OptionScreen(store: DecisionStore, decision: Decision, option: Option, onBac
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Histogram(stats)
                             StatRow("Expected value", fmt(stats.expectedValue))
-                            StatRow("Spread (std. dev.)", "±${fmt(stats.stdDev)}")
+                            StatRow("Upside (from good outcomes)", signed(stats.upside))
+                            StatRow("Downside (from bad outcomes)", signed(stats.downside))
                             StatRow("Chance of a bad outcome", pct(stats.chanceOfBad))
                             StatRow("Worst / best case", "${fmt(stats.worst)} / ${fmt(stats.best)}")
-                            if (!stats.sumsTo100) ProbabilityWarning(stats)
+                            StatRow("Spread (std. dev.)", "±${fmt(stats.stdDev)}")
+                            if (stats.isFreeroll) FreerollNote(short = false)
+                            ProbabilityNote(stats)
                         }
                     }
                 }
@@ -378,7 +417,8 @@ fun OptionScreen(store: DecisionStore, decision: Decision, option: Option, onBac
                         Column(Modifier.weight(1f)) {
                             Text(o.description, style = MaterialTheme.typography.bodyLarge)
                             Text(
-                                "Score ${if (o.score > 0) "+" else ""}${fmt(o.score)} · ${fmt(o.probability)}% likely",
+                                "Score ${signed(o.score)} · ${fmt(o.probability)}% likely" +
+                                    (o.impact?.let { " · happiness ${it.week}/${it.month}/${it.year} (wk/mo/yr)" } ?: ""),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = when {
                                     o.score > 0 -> MaterialTheme.colorScheme.primary
@@ -392,26 +432,36 @@ fun OptionScreen(store: DecisionStore, decision: Decision, option: Option, onBac
                 }
             }
             item {
-                OutlinedButton(onClick = { addingOutcome = true }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Default.Add, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Add outcome")
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { adding = OutcomePrompt.PREMORTEM }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("How could it go badly?")
+                    }
+                    OutlinedButton(onClick = { adding = OutcomePrompt.BACKCAST }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.Add, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("How could it go well?")
+                    }
                 }
             }
         }
     }
 
-    if (addingOutcome || editing != null) {
+    val prompt = adding ?: if (editing != null) OutcomePrompt.EDIT else null
+    if (prompt != null) {
         val current = editing
-        val othersTotal = option.outcomes.filter { it.id != current?.id }.sumOf { it.probability }
+        val others = option.outcomes.filter { it.id != current?.id }
         OutcomeDialog(
             optionName = option.name,
             existing = current,
-            remainingPercent = (100.0 - othersTotal).coerceAtLeast(0.0),
-            onDismiss = { addingOutcome = false; editing = null },
+            prompt = prompt,
+            remainingPercent = (100.0 - others.sumOf { it.probability }).coerceAtLeast(0.0),
+            hasOtherOutcomes = others.isNotEmpty(),
+            onDismiss = { adding = null; editing = null },
             onSave = { o ->
                 save(if (current == null) option.outcomes + o else option.outcomes.map { if (it.id == o.id) o else it })
-                addingOutcome = false
+                adding = null
                 editing = null
             },
         )
@@ -467,11 +517,33 @@ private fun StatRow(label: String, value: String) {
 }
 
 @Composable
-private fun ProbabilityWarning(stats: OptionStats) {
+private fun ProbabilityNote(stats: OptionStats) {
+    when {
+        stats.overAllocated -> Text(
+            "Probabilities add up to ${fmt(stats.enteredTotal)}%. These outcomes can't all happen at once, " +
+                "so they can't add up to more than 100%. Lower some of them (for now they're scaled down to 100%).",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        stats.incomplete -> Text(
+            "Your outcomes cover ${fmt(stats.enteredTotal)}% of the possibilities. The other " +
+                "${fmt(100 - stats.enteredTotal)}% counts as neutral (score 0). That's fine if it's unlikely long shots.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun FreerollNote(short: Boolean) {
     Text(
-        "Probabilities add up to ${fmt(stats.enteredTotal)}%, not 100%. " +
-            "They're treated as relative weights and scaled to 100%.",
+        if (short) "Freeroll: little to lose."
+        else "Freeroll: the worst case isn't really bad, and there's something to gain. Decide fast and spend " +
+            "your effort on doing it well. (If you'll make this same choice again and again, check that the " +
+            "small costs don't add up.)",
         style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.error,
+        fontWeight = if (short) FontWeight.Bold else FontWeight.Normal,
+        color = MaterialTheme.colorScheme.primary,
     )
 }
+
